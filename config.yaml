@@ -1,0 +1,13 @@
+site:
+  base_url: "https://www.pyeongtaek.go.kr"
+  sitemap: "https://www.pyeongtaek.go.kr/sitemap.xml"
+  exclude_domains:
+    - "pyeongtaek.go.kr"   # 내부 링크는 무시
+    - "localhost"
+  timeout: 10               # HTTP 요청 타임아웃(초)
+
+report:
+  output_dir: "reports"
+
+notify:
+  slack_webhook: ""         # 나중에 Slack Webhook을 넣으면 자동 알림, 없으면 비워 두세요
