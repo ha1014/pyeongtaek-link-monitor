@@ -1,0 +1,64 @@
+name: Daily External Link Check
+
+# KST 09:00 (UTC 00:00) 로 매일 실행하고 싶다면 cron을 적절히 바꾸세요.
+# 여기선 한국시간 09:00 → UTC 00:00 로 설정
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 매일 00:00 UTC (한국시간 09:00)
+  workflow_dispatch:      # 필요하면 수동 실행도 가능
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ 레포 내용 받아오기
+      - uses: actions/checkout@v4
+
+      # 2️⃣ Python 설치 & 패키지 설치
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 3️⃣ 사이트 크롤링 → data/links.json
+      - name: Crawl site & collect external links
+        run: |
+          mkdir -p data
+          scrapy runspider scraper/external_links_spider.py -o data/links.json -t jsonlines
+
+      # 4️⃣ 링크 검증 → reports/*.csv
+      - name: Validate external links
+        run: |
+          python -m validator.check_links
+
+      # 5️⃣ HTML 보고서 생성
+      - name: Generate HTML report
+        run: |
+          CSV=$(ls reports/link_check_$(date +%Y%m%d).csv)
+          python -m report.generate_report "$CSV"
+
+      # 6️⃣ (옵션) Slack 으로 알림 → Slack Webhook을 만든 뒤 Secrets에 넣어두면 자동 전송
+      - name: Notify Slack (optional)
+        if: env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          HTML=$(ls reports/link_check_$(date +%Y%m%d).html)
+          curl -F file=@"$HTML" \
+               -F "filename=$(basename $HTML)" \
+               -F "initial_comment=📊 오늘 외부링크 점검 결과입니다." \
+               $SLACK_WEBHOOK
+
+      # 7️⃣ 결과 파일을 GitHub Artifacts 로 보관 (30일 보관)
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: link-report
+          path: reports/
+          retention-days: 30
